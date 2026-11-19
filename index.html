@@ -26,6 +26,7 @@ th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);white-sp
 .in{color:var(--ok)}.out,.bad{color:var(--no);font-weight:600}.adjust,.warn{color:var(--wa);font-weight:600}
 .tabs>section{display:none}.tabs>section.on{display:block}
 #video{width:100%;border-radius:8px;margin-top:8px;display:none;background:#000}
+#reader{position:relative;overflow:hidden;border-radius:8px;background:#000}#reader video{width:100%;display:block}#reader canvas{display:none}
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--tx);max-width:400px;width:92%}
 dialog::backdrop{background:rgba(0,0,0,.5)}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:8px;display:none;z-index:9;max-width:90%}
@@ -36,7 +37,8 @@ small{color:var(--mu)}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script></head><body>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script></head><body>
 <div class="wrap">
 <header><h1>📦 庫存與領用管理系統</h1><div class="me" id="me">登入中…</div></header>
 <nav id="nav"><button data-t="dash" class="on">儀表板</button><button data-t="op">進出貨作業</button><button data-t="stock">商品庫存</button><button data-t="log">異動紀錄</button><button data-t="adm" class="adm">管理員</button></nav>
@@ -186,12 +188,18 @@ $('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;let data;try
  try{const old=products[g.barcode],{cnt,qty:_q,expiry:_x,...d}=g;await put({kind:'prod',...d,mig:true});products[g.barcode]=old||{...d,qty:0};const note='批次匯入'+(cnt>1?`（合併 ${cnt} 列）`:'');if(old)await move(g.barcode,'adjust',g.qty,'',note+'盤點',g.expiry);else if(g.qty>0)await move(g.barcode,'in',g.qty,'',note,g.expiry);n++}catch(e){bad++}}
   toast(`匯入完成：成功 ${n}，略過 ${skip}，失敗 ${bad}`,!bad);$('impRes').innerHTML='';$('file').value=''})};
 
-let stream,timer;$('cam').onclick=async()=>{if(!('BarcodeDetector'in window))return h5Start();
+let stream,timer;$('cam').onclick=async()=>{if(!('BarcodeDetector'in window))return window.Quagga?qStart():h5Start();
  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})}catch(e){return toast('無法開啟相機',false)}
  const v=$('video');v.srcObject=stream;v.style.display='block';await v.play();$('stopcam').style.display='';$('cam').style.display='none';const det=new BarcodeDetector();let b=false;
  timer=setInterval(async()=>{if(b)return;b=true;try{const r=await det.detect(v);if(r.length){stopCam();await lookup(r[0].rawValue)}}catch(e){}b=false},400)};
-function stopCam(){h5&&h5Stop();clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());stream=null;$('video').style.display='none';$('stopcam').style.display='none';$('cam').style.display=''}
+function stopCam(){qOn&&qStop();h5&&h5Stop();clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());stream=null;$('video').style.display='none';$('stopcam').style.display='none';$('cam').style.display=''}
 $('stopcam').onclick=stopCam;
+let qOn=false,qLast='',qCnt=0;
+const eanOk=c=>{if(/^\d{13}$/.test(c)){let s=0;for(let i=0;i<12;i++)s+=(+c[i])*(i%2?3:1);return (10-s%10)%10===+c[12]}return true};
+async function qDet(r){const c=r&&r.codeResult&&r.codeResult.code;if(!c||!eanOk(c))return;if(c===qLast)qCnt++;else{qLast=c;qCnt=1}if(qCnt>=2){qStop();navigator.vibrate&&navigator.vibrate(60);await lookup(c)}}
+function qStart(){$('reader').style.display='block';$('stopcam').style.display='';$('cam').style.display='none';qLast='';qCnt=0;
+ Quagga.init({inputStream:{type:'LiveStream',target:$('reader'),constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},area:{top:'20%',right:'5%',left:'5%',bottom:'20%'}},decoder:{readers:['ean_reader','ean_8_reader','upc_reader','code_128_reader','code_39_reader']},locate:true,locator:{patchSize:'medium',halfSample:true},numOfWorkers:0,frequency:10},err=>{if(err){qStop();toast('無法開啟相機，請改用「拍照辨識」',false);return}Quagga.onDetected(qDet);Quagga.start();qOn=true})}
+function qStop(){if(qOn){try{Quagga.offDetected(qDet);Quagga.stop()}catch(e){}qOn=false}$('reader').innerHTML='';$('reader').style.display='none';$('stopcam').style.display='none';$('cam').style.display=''}
 let h5;const FM=()=>{const F=Html5QrcodeSupportedFormats;return[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR,F.CODE_93,F.QR_CODE]};
 async function h5Start(){if(!window.Html5Qrcode)return toast('掃碼元件載入失敗，請改用拍照辨識或手動輸入',false);
  $('reader').style.display='block';$('stopcam').style.display='';$('cam').style.display='none';
