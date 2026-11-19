@@ -192,10 +192,10 @@ let stream,timer;$('cam').onclick=async()=>{if(!('BarcodeDetector'in window))ret
  timer=setInterval(async()=>{if(b)return;b=true;try{const r=await det.detect(v);if(r.length){stopCam();await lookup(r[0].rawValue)}}catch(e){}b=false},400)};
 function stopCam(){h5&&h5Stop();clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());stream=null;$('video').style.display='none';$('stopcam').style.display='none';$('cam').style.display=''}
 $('stopcam').onclick=stopCam;
-let h5;const FM=()=>{const F=Html5QrcodeSupportedFormats;return[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.QR_CODE]};
+let h5;const FM=()=>{const F=Html5QrcodeSupportedFormats;return[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR,F.CODE_93,F.QR_CODE]};
 async function h5Start(){if(!window.Html5Qrcode)return toast('掃碼元件載入失敗，請改用拍照辨識或手動輸入',false);
  $('reader').style.display='block';$('stopcam').style.display='';$('cam').style.display='none';
- try{h5=new Html5Qrcode('reader',{formatsToSupport:FM(),verbose:false});await h5.start({facingMode:'environment'},{fps:10,qrbox:{width:260,height:140}},async t=>{await h5Stop();await lookup(t)},()=>{})}
+ try{h5=new Html5Qrcode('reader',{formatsToSupport:FM(),verbose:false,experimentalFeatures:{useBarCodeDetectorIfSupported:true}});await h5.start({facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},{fps:15,qrbox:(w,h)=>({width:Math.floor(w*0.85),height:Math.floor(Math.min(h*0.5,160))})},async t=>{await h5Stop();await lookup(t)},()=>{})}
  catch(e){await h5Stop();toast('無法開啟即時相機，請改用「拍照辨識」',false)}}
 async function h5Stop(){const h=h5;h5=null;try{if(h){await h.stop();h.clear()}}catch(e){}$('reader').style.display='none';$('stopcam').style.display='none';$('cam').style.display=''}
 $('shot').onclick=()=>$('photo').click();
