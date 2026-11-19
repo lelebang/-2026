@@ -25,6 +25,7 @@ button.p{background:var(--ac);border-color:var(--ac);color:#fff}button:disabled{
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-weight:500}
 .in{color:var(--ok)}.out,.bad{color:var(--no);font-weight:600}.adjust,.warn{color:var(--wa);font-weight:600}
 .tabs>section{display:none}.tabs>section.on{display:block}
+#dtxt{white-space:pre-line}#log td,#log th{white-space:normal;word-break:break-word}#logT td.adm{white-space:nowrap}#logT td:nth-child(4){min-width:120px}#logT button{min-height:34px;padding:4px 10px;font-size:13px}.isadm td.adm,.isadm th.adm{display:table-cell}
 #video{width:100%;border-radius:8px;margin-top:8px;display:none;background:#000}
 #reader{position:relative;overflow:hidden;border-radius:8px;background:#000}#reader video{width:100%;display:block}#reader canvas{display:none}
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--tx);max-width:400px;width:92%}
@@ -82,7 +83,7 @@ small{color:var(--mu)}
 <section id="log"><div class="card"><h2>異動紀錄</h2>
  <div class="row"><div><label>領取人</label><input id="l_p"></div><div><label>商品／條碼</label><input id="l_q"></div><div><label>起 (yyyy/mm/dd)</label><input id="l_a" inputmode="numeric" placeholder="2026/11/01" maxlength="10"></div><div><label>迄 (yyyy/mm/dd)</label><input id="l_b" inputmode="numeric" placeholder="2026/11/30" maxlength="10"></div>
  <div><label>類型</label><select id="l_t"><option value="">全部</option><option value="in">入庫</option><option value="out">領取</option><option value="adjust">調整</option></select></div><button id="exp">匯出 CSV</button></div>
- <div class="scroll"><table><thead><tr><th>時間</th><th>類型</th><th>商品</th><th>變動</th><th>結餘</th><th>經手人（帳號）</th><th>領取者</th><th>目的／來源</th><th>備註</th></tr></thead><tbody id="logT"></tbody></table></div></div></section>
+ <div class="scroll"><table><thead><tr><th class="adm"></th><th>時間</th><th>類型</th><th>商品</th><th>變動</th><th>結餘</th><th>經手人（帳號）</th><th>領取者</th><th>目的／來源</th><th>備註</th></tr></thead><tbody id="logT"></tbody></table></div></div></section>
 
 <section id="adm"><div class="card" id="lockBox"><h2>🔒 管理員驗證</h2><p><small>請輸入管理員密碼</small></p><div class="row"><input id="pw" type="password" inputmode="numeric" placeholder="密碼"><button class="p" id="unlock">解鎖</button></div></div>
 <div id="admBody" style="display:none"><div style="margin-bottom:10px"><button id="lockBtn">🔒 鎖定管理功能</button></div>
@@ -98,6 +99,14 @@ small{color:var(--mu)}
 
 <dialog id="dlg"><form method="dialog" style="margin:0"><p id="dtxt" style="margin-top:0"></p>
  <div class="row" style="justify-content:flex-end"><button value="no" id="dno">取消</button><button value="yes" id="dyes" class="p">確認</button></div></form></dialog>
+<dialog id="edlg"><div><h2 style="margin:0 0 6px;font-size:16px">編輯紀錄</h2><p id="edinfo" style="margin:0 0 6px"></p>
+<label>效期 (yyyy/mm/dd，留空＝無效期)</label><input id="ed_exp" inputmode="numeric" maxlength="10" placeholder="2027/06/30">
+<label>變動數量（入庫為正、領取為負）</label><input id="ed_delta" type="number">
+<div id="ed_pbox"><label>領取者</label><select id="ed_picker"></select></div>
+<div id="ed_tbox"><label id="ed_tl">目的／來源</label><select id="ed_tag"></select></div>
+<label>備註</label><input id="ed_note">
+<div id="edmsg" style="color:var(--no);font-size:13px;margin-top:6px"></div>
+<div class="row" style="justify-content:flex-end;margin-top:10px"><button id="edno">取消</button><button class="p" id="edyes">儲存</button></div></div></dialog>
 <div id="gate" style="display:none;position:fixed;inset:0;z-index:20;background:var(--bg);padding:24px"><div class="card" style="max-width:380px;margin:12vh auto"><h2>🔐 員工登入</h2><p><small>請輸入員工編號作為密碼</small></p><input id="gid" type="password" autocomplete="off" placeholder="員工編號"><div style="margin-top:10px"><button class="p" id="gbtn" style="width:100%">進入系統</button></div><div class="msg" id="gmsg" style="font-size:13px;margin-top:8px"></div></div></div>
 <div id="toast"></div>
 
@@ -131,7 +140,7 @@ async function init(){
  setMe();$('gate').style.display='block';
  db.collection('products').onSnapshot(s=>{prodBase={};s.docs.forEach(d=>{const x=d.data();x.expiry=normDate(x.expiry)||'';x.lq=x.mig?0:(x.qty||0);x.lx=x.expiry;prodBase[d.id]=x});rebuild()},e=>console.error(e));
  db.collection('settings').doc('alert').onSnapshot(s=>{if(s.exists)baseDays=s.data().days||30;alertDays=cfgDays||baseDays;$('alertDays').value=alertDays;render()},e=>console.error(e));
- db.collection('mv/main/e').onSnapshot(q=>{mvs.main=q.docs.map(x=>x.data());rebuild()},e=>console.error(e));
+ db.collection('mv/main/e').onSnapshot(q=>{mvs.main=q.docs.map(x=>({...x.data(),_id:x.id,_u:'main'}));rebuild()},e=>console.error(e));
 }
 const nm=id=>(names[id]&&names[id].name)||'使用者';
 function render(){
@@ -147,7 +156,7 @@ $('stockT').onclick=e=>{const c=e.target.dataset.e;if(!c)return;const p=products
 function filtered(){const p=$('l_p').value.trim().toLowerCase(),q=$('l_q').value.trim().toLowerCase(),a=dtMs($('l_a').value,'T00:00:00',0),b=dtMs($('l_b').value,'T23:59:59',1e15),t=$('l_t').value;
  return logs.filter(l=>(!p||(l.picker||'').toLowerCase().includes(p)||nm(l.op).toLowerCase().includes(p))&&(!q||(l.name+l.barcode).toLowerCase().includes(q))&&l.ts>=a&&l.ts<=b&&(!t||l.type===t))}
 const TN={in:'入庫',out:'領取',adjust:'調整'};
-function renderLogs(){$('logT').innerHTML=filtered().slice(0,200).map(l=>`<tr><td>${new Date(l.ts).toLocaleString('zh-TW',{hour12:false})}</td><td class="${l.type}">${TN[l.type]}</td><td>${esc(l.name)}</td><td>${l.delta>0?'+':''}${l.delta}</td><td>${l.after}</td><td>${esc(l.en||'管理員')}</td><td>${esc(l.picker||'-')}</td><td>${esc(l.tag||'-')}</td><td>${l.exp?'效期 '+l.exp+' ':''}${esc(l.note)}</td></tr>`).join('')||'<tr><td colspan=9><small>無紀錄</small></td></tr>';
+function renderLogs(){$('logT').innerHTML=filtered().slice(0,200).map(l=>`<tr><td class="adm"><button data-k="${esc(l._u+'|'+l._id)}" data-a="e">編輯</button> <button data-k="${esc(l._u+'|'+l._id)}" data-a="d">刪除</button></td><td>${new Date(l.ts).toLocaleString('zh-TW',{hour12:false})}</td><td class="${l.type}">${TN[l.type]}</td><td>${esc(l.name)}</td><td>${l.delta>0?'+':''}${l.delta}</td><td>${l.after}</td><td>${esc(l.en||'管理員')}</td><td>${esc(l.picker||'-')}</td><td>${esc(l.tag||'-')}</td><td>${l.exp?'效期 '+l.exp+' ':''}${esc(l.note)}${l.edited?' <small>（已編輯）</small>':''}</td></tr>`).join('')||'<tr><td colspan=10><small>無紀錄</small></td></tr>';
  }
 ['l_p','l_q','l_a','l_b','l_t'].forEach(i=>$(i).oninput=renderLogs);
 const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
@@ -210,7 +219,7 @@ $('shot').onclick=()=>$('photo').click();
 $('photo').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!window.Html5Qrcode)return toast('掃碼元件載入失敗',false);
  const box=document.createElement('div');box.id='tmpreader';box.style.display='none';document.body.appendChild(box);
  try{const q=new Html5Qrcode('tmpreader',{formatsToSupport:FM(),verbose:false});const t=await q.scanFile(f,false);await lookup(t)}catch(err){toast('辨識不到條碼，請靠近一點、對焦清楚後重拍',false)}box.remove()};
-['f_exp','l_a','l_b'].forEach(i=>$(i).addEventListener('input',e=>{const t=e.target;if(e.inputType&&e.inputType.startsWith('delete'))return;const d=t.value.replace(/\D/g,'').slice(0,8);t.value=d.length>6?d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6):d.length>4?d.slice(0,4)+'/'+d.slice(4):d;if(i!=='f_exp')renderLogs()}));
+['f_exp','l_a','l_b','ed_exp'].forEach(i=>$(i).addEventListener('input',e=>{const t=e.target;if(e.inputType&&e.inputType.startsWith('delete'))return;const d=t.value.replace(/\D/g,'').slice(0,8);t.value=d.length>6?d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6):d.length>4?d.slice(0,4)+'/'+d.slice(4):d;if(i==='l_a'||i==='l_b')renderLogs()}));
 function applyStock(){Object.values(products).forEach(p=>{const bs=batches[p.barcode]||[];p.qty=bs.reduce((s,b)=>s+b.qty,0);p.expiry=bs.filter(b=>b.exp&&b.qty>0).map(b=>b.exp).sort()[0]||''})}
 function fillPicker(){const s=$('picker'),v=s.value||(emp?emp.name:''),L=[...new Set(Object.values(emps).map(e=>e.name))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));s.innerHTML='<option value="">'+(L.length?'（請選擇領取者）':'（請先到管理員功能新增員工）')+'</option>'+L.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');s.value=L.includes(v)?v:''}
 let srcs={};
@@ -219,7 +228,7 @@ function renderOpts(){const k=JSON.stringify(opts);if(k===lastOpts)return;lastOp
  [['purpose','optPurpose'],['source','optSource']].forEach(([l,id])=>{$(id).innerHTML=opts[l].map((x,i)=>`<div class="row" style="margin-bottom:6px"><input value="${esc(x)}"><button data-ol="${l}" data-oi="${i}" data-oa="s">儲存</button><button data-ol="${l}" data-oi="${i}" data-oa="d">刪除</button></div>`).join('')+`<div class="row"><input placeholder="新增選項"><button class="p" data-ol="${l}" data-oa="a">新增</button></div>`})}
 function rebuild(){const raw=Object.values(mvs).flat().sort((a,b)=>a.ts-b.ts),bal={},tot={};
  admins=new Set(roots);prodOps={};cfgDays=0;pwHash='';emps={};opts={purpose:[],source:[]};
- const all=raw.filter(m=>{if(!m.kind)return true;if(m.kind==='adm'){if(m.on)admins.add(m.target);else if(!roots.has(m.target))admins.delete(m.target)}else if(m.kind==='prod'){prodOps[m.barcode]={...(prodOps[m.barcode]||{}),barcode:m.barcode,name:m.name,spec:m.spec,unit:m.unit,safe:m.safe,loc:m.loc}}else if(m.kind==='cfg'){cfgDays=m.days}else if(m.kind==='pw'){pwHash=m.hash}else if(m.kind==='opt'){if(opts[m.list])opts[m.list]=Array.isArray(m.items)?m.items:[]}else if(m.kind==='emp'){if(m.on)emps[m.idh]={name:m.name,tail:m.tail};else delete emps[m.idh]}return false});
+ const all=raw.filter(m=>{if(m.void)return false;if(!m.kind)return true;if(m.kind==='adm'){if(m.on)admins.add(m.target);else if(!roots.has(m.target))admins.delete(m.target)}else if(m.kind==='prod'){prodOps[m.barcode]={...(prodOps[m.barcode]||{}),barcode:m.barcode,name:m.name,spec:m.spec,unit:m.unit,safe:m.safe,loc:m.loc}}else if(m.kind==='cfg'){cfgDays=m.days}else if(m.kind==='pw'){pwHash=m.hash}else if(m.kind==='opt'){if(opts[m.list])opts[m.list]=Array.isArray(m.items)?m.items:[]}else if(m.kind==='emp'){if(m.on)emps[m.idh]={name:m.name,tail:m.tail,adm:!!m.adm};else delete emps[m.idh]}return false});
  srcs={};all.forEach(m=>{if(m.type==='in'&&m.tag)(srcs[m.barcode]=srcs[m.barcode]||new Map()).set(m.tag,m.ts);const k=m.barcode+'|'+(m.exp||'');bal[k]=(bal[k]||0)+m.delta;tot[m.barcode]=(tot[m.barcode]||0)+m.delta;m.after=tot[m.barcode]});
  batches={};for(const k in bal){const i=k.indexOf('|'),c=k.slice(0,i);(batches[c]=batches[c]||[]).push({exp:k.slice(i+1),qty:bal[k]})}
  logs=all.reverse();products={};new Set([...Object.keys(prodBase),...Object.keys(prodOps)]).forEach(c=>products[c]={...(prodBase[c]||{}),...(prodOps[c]||{}),barcode:c});alertDays=cfgDays||baseDays;$('alertDays').value=alertDays;isAdmin=!!(emp&&emp.sys);document.body.classList.toggle('isadm',isAdmin);setMe();applyStock();render();refSel();renderCart();renderLogs();renderOpts();fillPicker();if(isAdmin)renderEmps()
@@ -247,6 +256,8 @@ $('submit').onclick=()=>lock(async()=>{const rs=C.filter(r=>products[r.c]);if(!r
  if(mode==='out'){const g={};rs.forEach(r=>g[r.c]=(g[r.c]||0)+r.q);for(const c in g){const q=g[c],pn=products[c].name;if(!(q>=1)){errs.push(pn+'：數量不正確');continue}const a=alloc(c,q);if(a.short>0)errs.push(`${pn}：領取量 ${q} 超過庫存`);a.out.forEach(x=>jobs.push({c,e:x.exp,q:x.take}))}}
  else rs.forEach(r=>{if(!(r.q>=(mode==='adjust'?0:1)))errs.push(products[r.c].name+'：數量不正確');else jobs.push(r)});
  if(errs.length)return toast(errs.slice(0,3).join('；'),false);
+ if(mode==='out'){const cs=[...new Set(jobs.map(j=>j.c))],ms=cs.filter(c=>(batches[c]||[]).filter(b=>b.qty>0).length>=2);
+ if(ms.length&&!await ask('以下商品庫存有多個效期，請務必先拿「最先到期」的效期：\n\n'+ms.map(c=>{const bs=(batches[c]||[]).filter(b=>b.qty>0).sort((a,b)=>(a.exp||'9999').localeCompare(b.exp||'9999'));return products[c].name+'\n'+bs.map((b,i)=>`  ${i+1}. 效期 ${b.exp||'無效期'}（庫存 ${b.qty}）`).join('\n')+'\n  本次領取：'+jobs.filter(j=>j.c===c).map(j=>`${j.e||'無效期'} × ${j.q}`).join('、')}).join('\n\n'),'我知道了，繼續領取','取消'))return}
  if(mode==='out'){const ex=jobs.filter(j=>j.e&&days(j.e)<0);if(ex.length&&!await ask(`領取內容包含已過期批次（${[...new Set(ex.map(j=>products[j.c].name+' '+j.e))].join('、')}），仍要領取嗎？`))return}
  let n=0;const fail=[];for(const j of jobs){try{await move(j.c,mode,j.q,picker,note,j.e,tag);n++}catch(e){fail.push(products[j.c].name+'：'+(e.message||'失敗'))}}
  C=[];$('note').value='';renderCart();if(!fail.length)toast(`${TN[mode]}完成，共 ${n} 筆`);else toast(`成功 ${n} 筆，失敗 ${fail.length} 筆（請重新加入失敗項目）：${fail.join('；')}`,false)});
@@ -269,15 +280,36 @@ $('pw').onkeydown=e=>{if(e.key==='Enter')$('unlock').click()};
 $('lockBtn').onclick=()=>{unlocked=false;showAdm()};
 $('chpw').onclick=()=>lock(async()=>{const a=$('pw1').value,b=$('pw2').value;if(a.length<4)return toast('密碼至少 4 碼',false);if(a!==b)return toast('兩次輸入不一致',false);try{await put({kind:'pw',hash:await sha(a)});$('pw1').value=$('pw2').value='';toast('密碼已修改')}catch(e){toast('修改失敗',false)}});
 const shaE=id=>sha('emp:'+id);
-function renderEmps(){const L=Object.entries(emps);$('empList').innerHTML=L.map(([h,e])=>`<div class='row' style='margin-bottom:6px'><span>${esc(e.name)} <small>編號末碼 ••${esc(e.tail||'')}</small></span><button data-ed='${h}'>移除</button></div>`).join('')||'<small>尚未新增員工</small>'}
+function renderEmps(){const L=Object.entries(emps);$('empList').innerHTML=L.map(([h,e])=>`<div class='row' style='margin-bottom:6px'><span>${esc(e.name)} <small>編號末碼 ••${esc(e.tail||'')}${e.adm?'　<b style="color:var(--ac)">管理員</b>':''}</small></span><button data-ea='${h}'>${e.adm?'取消管理員':'設為管理員'}</button><button data-ed='${h}'>移除</button></div>`).join('')||'<small>尚未新增員工</small>'}
 $('empAdd').onclick=()=>lock(async()=>{const id=$('empId').value.trim().toUpperCase(),n=$('empName').value.trim();if(!id||!n)return toast('請填寫員工編號與姓名',false);try{await put({kind:'emp',on:true,idh:await shaE(id),name:n,tail:id.slice(-2)});$('empId').value=$('empName').value='';toast('已新增員工：'+n)}catch(e){toast('新增失敗',false)}});
-$('empList').onclick=e=>{const h=e.target.dataset.ed;if(h)lock(async()=>{try{await put({kind:'emp',on:false,idh:h});toast('已移除員工')}catch(err){toast('移除失敗',false)}})};
+$('empList').onclick=e=>{const h=e.target.dataset.ed,a=e.target.dataset.ea;if(a){const x=emps[a];if(!x)return;lock(async()=>{try{await put({kind:'emp',on:true,idh:a,name:x.name,tail:x.tail,adm:!x.adm});toast(x.adm?'已取消管理員':'已設為管理員')}catch(err){toast('操作失敗',false)}});return}if(h)lock(async()=>{try{await put({kind:'emp',on:false,idh:h});toast('已移除員工')}catch(err){toast('移除失敗',false)}})};
 async function enter(){const raw=$('gid').value.trim(),v=raw.toUpperCase(),gm=$('gmsg');gm.style.color='var(--no)';if(!v)return;
  if(Date.now()<gLock){gm.textContent='嘗試次數過多，請 30 秒後再試';return}
- let who=null;try{const h=await shaE(v);if(emps[h])who={name:emps[h].name,tail:emps[h].tail}}catch(e){}
+ let who=null;try{const h=await shaE(v);if(emps[h])who={name:emps[h].name,tail:emps[h].tail,sys:!!emps[h].adm}}catch(e){}
  if(!who){let ok=false;try{ok=pwHash?(await sha(raw))===pwHash:raw==='8888'}catch(e){}if(ok)who={name:'管理員',tail:'',sys:true}}
  if(!who){if(++gBad>=5){gBad=0;gLock=Date.now()+3e4}gm.textContent=Object.keys(emps).length?'員工編號錯誤':'員工編號錯誤（尚未建立員工名單，請先用管理員密碼登入）';return}
  gBad=0;emp=who;gm.textContent='';$('gate').style.display='none';$('gid').value='';isAdmin=!!who.sys;unlocked=isAdmin;document.body.classList.toggle('isadm',isAdmin);showAdm();rebuild()}
 $('gbtn').onclick=enter;$('gid').onkeydown=e=>{if(e.key==='Enter')enter()};
+function selFill(id,list,cur){const s=$(id),L=[...list];if(cur&&!L.includes(cur))L.push(cur);s.innerHTML='<option value="">（無）</option>'+L.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');s.value=cur||''}
+let edL=null;
+function chkBal(l,nx){const k0=l._u+'|'+l._id,bal={};logs.forEach(m=>{const x=(m._u+'|'+m._id)===k0?nx:m;if(!x)return;const k=x.barcode+'|'+(x.exp||'');bal[k]=(bal[k]||0)+x.delta});
+ const ks=[l.barcode+'|'+(l.exp||'')];if(nx)ks.push(nx.barcode+'|'+(nx.exp||''));
+ for(const k of ks)if((bal[k]||0)<0)return `${l.name} 效期 ${k.slice(k.lastIndexOf('|')+1)||'無效期'} 的庫存會變成 ${bal[k]}，無法儲存`;return ''}
+function openEd(l){edL=l;$('edinfo').innerHTML=`<small>${new Date(l.ts).toLocaleString('zh-TW',{hour12:false})}　${TN[l.type]}　${esc(l.name)}</small>`;$('ed_exp').value=l.exp||'';$('ed_delta').value=l.delta;$('ed_note').value=l.note||'';$('edmsg').textContent='';
+ $('ed_pbox').style.display=l.type==='out'?'':'none';$('ed_tbox').style.display=l.type==='adjust'?'none':'';$('ed_tl').textContent=l.type==='out'?'領取目的':'入庫來源';
+ selFill('ed_picker',[...new Set(Object.values(emps).map(e=>e.name))],l.picker);selFill('ed_tag',l.type==='out'?opts.purpose:opts.source,l.tag);$('edlg').showModal()}
+$('edno').onclick=()=>$('edlg').close();
+$('edyes').onclick=()=>lock(async()=>{const l=edL,m=$('edmsg');if(!l)return;const ex=normDate($('ed_exp').value);if(ex===null){m.textContent='效期格式需為 yyyy/mm/dd';return}
+ const d=parseInt($('ed_delta').value,10);if(!Number.isInteger(d)||(d===0&&l.type!=='adjust')){m.textContent='變動數量不正確';return}
+ if((l.type==='in'&&d<0)||(l.type==='out'&&d>0)){m.textContent=l.type==='in'?'入庫數量必須為正數':'領取數量必須為負數';return}
+ const er=chkBal(l,{...l,exp:ex,delta:d});if(er){m.textContent=er;return}
+ const patch={exp:ex,delta:d,note:$('ed_note').value.trim(),edited:true,editBy:emp?emp.name:'',editTs:Date.now()};
+ if(l.type==='out')patch.picker=$('ed_picker').value;if(l.type!=='adjust')patch.tag=$('ed_tag').value;
+ try{await db.collection('mv/'+l._u+'/e').doc(l._id).update(patch);$('edlg').close();toast('紀錄已更新')}catch(e){m.textContent='儲存失敗：'+(e.message||'')}});
+$('logT').onclick=e=>{const b=e.target.closest('button[data-k]');if(!b)return;const l=logs.find(x=>x._u+'|'+x._id===b.dataset.k);if(!l)return;
+ if(b.dataset.a==='e')return openEd(l);
+ lock(async()=>{const er=chkBal(l,null);if(er)return toast(er.replace('無法儲存','無法刪除'),false);
+  if(!await ask(`確定刪除這筆紀錄？\n${new Date(l.ts).toLocaleString('zh-TW',{hour12:false})} ${TN[l.type]} ${l.name} ${l.delta>0?'+':''}${l.delta}\n刪除後庫存會重新計算。`,'刪除'))return;
+  try{await db.collection('mv/'+l._u+'/e').doc(l._id).update({void:true,voidBy:emp?emp.name:'',voidTs:Date.now()});toast('已刪除')}catch(err){toast('刪除失敗',false)}})};
 init();
 </script></body></html>
