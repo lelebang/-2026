@@ -33,10 +33,13 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 small{color:var(--mu)}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script></head><body>
 <div class="wrap">
 <header><h1>📦 庫存與領用管理系統</h1><div class="me" id="me">登入中…</div></header>
-<nav id="nav"><button data-t="dash" class="on">儀表板</button><button data-t="op">掃碼作業</button><button data-t="stock">商品庫存</button><button data-t="log">異動紀錄</button><button data-t="imp" class="adm">批次匯入</button><button data-t="adm" class="adm">管理員</button></nav>
+<nav id="nav"><button data-t="dash" class="on">儀表板</button><button data-t="op">進出貨作業</button><button data-t="stock">商品庫存</button><button data-t="log">異動紀錄</button><button data-t="adm" class="adm">管理員</button></nav>
 <div class="tabs" id="tabs">
 
 <section id="dash" class="on">
@@ -49,8 +52,8 @@ small{color:var(--mu)}
 </section>
 
 <section id="op">
- <div class="card"><h2>掃碼作業</h2>
-  <div class="seg" id="modes"><button data-m="in" class="on">入庫</button><button data-m="out">領取</button><button data-m="adjust">盤點修正</button></div>
+ <div class="card"><h2>進出貨作業</h2>
+  <div class="seg" id="modes"><button data-m="in" class="on">進貨入庫</button><button data-m="out">出貨領取</button><button data-m="adjust">盤點修正</button></div>
   <label>條碼（可只輸入部分數字，掃描槍直接掃或輸入後按 Enter）</label>
   <div class="row"><input id="bc" inputmode="numeric" autocomplete="off"><button id="go">查詢</button><button id="cam">📷 相機</button><button id="shot">🖼 拍照辨識</button><button id="stopcam" style="display:none">停止</button><input id="photo" type="file" accept="image/*" capture="environment" style="display:none"></div>
   <div id="reader" style="display:none;margin-top:8px"></div>
@@ -60,7 +63,9 @@ small{color:var(--mu)}
   <h2 style="margin-top:12px">📋 本次清單 <small id="cartN"></small></h2>
   <div class="scroll"><table><thead><tr><th>商品</th><th>庫存</th><th id="cqh">數量</th><th></th></tr></thead><tbody id="cartT"></tbody></table></div>
   <div class="row"><div><label id="qlabel">加入時的數量</label><input id="qty" type="number" min="0" value="1"></div>
-   <div id="pickBox"><label>領取者</label><input id="picker" list="pickers"><datalist id="pickers"></datalist></div></div>
+   <div id="pickBox"><label>領取者</label><select id="picker"></select></div>
+   <div id="purBox"><label>領取目的</label><select id="purpose"></select></div>
+   <div id="srcBox"><label>入庫來源</label><select id="source"></select></div></div>
   <label>用途／備註</label><input id="note">
   <div style="margin-top:10px"><button class="p" id="submit" style="width:100%">送出清單</button></div></div>
  <div class="card adm"><h2>新增／編輯商品（管理員）</h2>
@@ -70,14 +75,19 @@ small{color:var(--mu)}
 </section>
 
 <section id="stock"><div class="card"><h2>商品庫存（即時）</h2><input id="q1" placeholder="搜尋名稱或條碼">
- <div class="scroll"><table><thead><tr><th>條碼</th><th>名稱</th><th>規格</th><th>庫存</th><th>安全量</th><th>效期批次</th><th>位置</th><th class="adm"></th></tr></thead><tbody id="stockT"></tbody></table></div></div></section>
+ <div class="scroll"><table><thead><tr><th>條碼</th><th>名稱</th><th>規格</th><th>庫存</th><th>安全量</th><th>效期批次</th><th>來源</th><th>位置</th><th class="adm"></th></tr></thead><tbody id="stockT"></tbody></table></div></div></section>
 
 <section id="log"><div class="card"><h2>異動紀錄</h2>
  <div class="row"><div><label>領取人</label><input id="l_p"></div><div><label>商品／條碼</label><input id="l_q"></div><div><label>起 (yyyy/mm/dd)</label><input id="l_a" inputmode="numeric" placeholder="2026/11/01" maxlength="10"></div><div><label>迄 (yyyy/mm/dd)</label><input id="l_b" inputmode="numeric" placeholder="2026/11/30" maxlength="10"></div>
  <div><label>類型</label><select id="l_t"><option value="">全部</option><option value="in">入庫</option><option value="out">領取</option><option value="adjust">調整</option></select></div><button id="exp">匯出 CSV</button></div>
- <div class="scroll"><table><thead><tr><th>時間</th><th>類型</th><th>商品</th><th>變動</th><th>結餘</th><th>經手帳號</th><th>領取者</th><th>備註</th></tr></thead><tbody id="logT"></tbody></table></div></div></section>
+ <div class="scroll"><table><thead><tr><th>時間</th><th>類型</th><th>商品</th><th>變動</th><th>結餘</th><th>經手人（帳號）</th><th>領取者</th><th>目的／來源</th><th>備註</th></tr></thead><tbody id="logT"></tbody></table></div></div></section>
 
-<section id="adm"><div class="card"><h2>👥 管理員名單</h2><div id="admList"></div></div><div class="card"><h2>新增管理員</h2><input id="admQ" placeholder="輸入姓名搜尋使用者"><div id="admRes" style="margin-top:8px"></div></div></section>
+<section id="adm"><div class="card" id="lockBox"><h2>🔒 管理員驗證</h2><p><small>請輸入管理員密碼</small></p><div class="row"><input id="pw" type="password" inputmode="numeric" placeholder="密碼"><button class="p" id="unlock">解鎖</button></div></div>
+<div id="admBody" style="display:none"><div style="margin-bottom:10px"><button id="lockBtn">🔒 鎖定管理功能</button></div>
+<div class="card"><h2>📤 領取目的選項</h2><p><small>員工出貨領取時可選的目的，可新增、修改、刪除。</small></p><div id="optPurpose"></div></div>
+<div class="card"><h2>📥 入庫來源選項</h2><p><small>進貨入庫時可選的來源（如：食物銀行、民眾捐贈），可新增、修改、刪除。</small></p><div id="optSource"></div></div>
+<div class="card"><h2>👷 員工管理（員工編號即登入密碼）</h2><div class="row"><div><input id="empId" placeholder="員工編號"></div><div><input id="empName" placeholder="姓名"></div><button class="p" id="empAdd">新增員工</button></div><div id="empList" style="margin-top:10px"></div></div>
+<div class="card"><h2>🔑 修改管理員密碼</h2><div class="row"><div><input id="pw1" type="password" placeholder="新密碼（至少 4 碼）"></div><div><input id="pw2" type="password" placeholder="再輸入一次"></div><button class="p" id="chpw">修改</button></div></div></div></section>
 <section id="imp"><div class="card"><h2>批次匯入 CSV</h2>
  <p><small>直接上傳 Excel（.xlsx）。欄位順序：條碼、名稱、規格、單位、庫存、安全庫存、效期（yyyy/mm/dd）、位置，第一列為標題。建議「條碼」與「效期」欄設為文字格式。已存在的條碼會以「盤點修正」更新，新條碼則建立並入庫。同一條碼且同效期的列會合計，不同效期會分成不同批次；同一組重複 4 次以上時，匯入前會詢問是否存入。</small></p>
  <div class="row"><button id="tpl">下載範本</button><input type="file" id="file" accept=".xlsx,.xls,.csv"></div>
@@ -86,11 +96,16 @@ small{color:var(--mu)}
 
 <dialog id="dlg"><form method="dialog" style="margin:0"><p id="dtxt" style="margin-top:0"></p>
  <div class="row" style="justify-content:flex-end"><button value="no" id="dno">取消</button><button value="yes" id="dyes" class="p">確認</button></div></form></dialog>
+<div id="gate" style="display:none;position:fixed;inset:0;z-index:20;background:var(--bg);padding:24px"><div class="card" style="max-width:380px;margin:12vh auto"><h2>🔐 員工登入</h2><p><small>請輸入員工編號作為密碼</small></p><input id="gid" type="password" autocomplete="off" placeholder="員工編號"><div style="margin-top:10px"><button class="p" id="gbtn" style="width:100%">進入系統</button></div><div class="msg" id="gmsg" style="font-size:13px;margin-top:8px"></div></div></div>
 <div id="toast"></div>
 
 <script>
+// ===== 請把 Firebase 專案設定貼在這裡（Firebase 主控台 → 專案設定 → 您的應用程式 → SDK 設定）=====
+const FB_CONFIG={apiKey:"AIzaSyDGdVpWNQB41w_6GsT8pBIGLZfIPBQxlIE",authDomain:"inventory-system-ac191.firebaseapp.com",projectId:"inventory-system-ac191",storageBucket:"inventory-system-ac191.firebasestorage.app",messagingSenderId:"753039735407",appId:"1:753039735407:web:d8a787d1020ff61ee0ab9a"};
+// 下載功能（原本由 Claude 提供，改為瀏覽器直接下載）
+const claude={use:async n=>n==='downloads'?{save:async({filename,data})=>{const b=new Blob([data],{type:'application/octet-stream'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1e3)}}:null};
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let db,me,isAdmin=false,isEditor=false,prodBase={},prodOps={},roots=new Set(),admins=new Set(),baseDays=30,cfgDays=0,mode='in',sel=null,products={},logs=[],names={},alertDays=30,busy=false,rows=[],batches={},subs={},mvs={},C=[];
+let db,me,isAdmin=false,isEditor=false,prodBase={},prodOps={},roots=new Set(),admins=new Set(),baseDays=30,cfgDays=0,pwHash='',unlocked=false,badTry=0,lockUntil=0,emp=null,emps={},gBad=0,gLock=0,mode='in',sel=null,products={},logs=[],names={},alertDays=30,busy=false,rows=[],batches={},subs={},mvs={},C=[],opts={purpose:[],source:[]},lastOpts='';
 function toast(t,ok=true){const e=$('toast');e.textContent=t;e.style.background=ok?'#166534':'#991b1b';e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2800)}
 function ask(t,yes='確認',no='取消'){return new Promise(r=>{$('dtxt').textContent=t;$('dyes').textContent=yes;$('dno').textContent=no;const d=$('dlg');d.onclose=()=>r(d.returnValue==='yes');d.showModal()})}
 const pad=n=>String(n).padStart(2,'0');
@@ -101,43 +116,41 @@ function normDate(v){if(v===''||v==null)return'';if(v instanceof Date){v=new Dat
 const dtMs=(v,t,def)=>{const n=normDate(v);return n?new Date(n.replace(/\//g,'-')+t).getTime():def};
 const days=e=>e?Math.ceil((new Date(e.replace(/\//g,'-')+'T00:00:00')-new Date().setHours(0,0,0,0))/864e5):null;
 const lock=async f=>{if(busy)return;busy=true;document.querySelectorAll('button:not(#dyes):not(#dno)').forEach(b=>b.disabled=true);try{await f()}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false)}};
+const goTab=t=>document.querySelector('#nav button[data-t='+t+']').click();
 
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('#tabs>section').forEach(s=>s.classList.toggle('on',s.id===b.dataset.t))});
-document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('#modes button').forEach(x=>x.classList.toggle('on',x===b));$('pickBox').style.display=mode==='out'?'':'none';$('qlabel').textContent=mode==='adjust'?'加入時的盤點數量':'加入時的數量';renderCart()});
-$('pickBox').style.display='none';
+function modeUI(){$('pickBox').style.display=mode==='out'?'':'none';$('purBox').style.display=mode==='out'?'':'none';$('srcBox').style.display=mode==='in'?'':'none'}
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('#modes button').forEach(x=>x.classList.toggle('on',x===b));modeUI();$('qlabel').textContent=mode==='adjust'?'加入時的盤點數量':'加入時的數量';renderCart()});
+modeUI();
 
 async function init(){
- try{const u=await claude.use('user');db=await claude.use('db');if(u){const v=await u.me();me={id:(await u.id())||v.id,name:v.name||'使用者'};isEditor=await u.canEdit()||await u.isOwner();isAdmin=isEditor}}catch(e){}
- if(!db||!me||!me.id){$('me').textContent='未登入';$('nav').style.display='none';$('tabs').innerHTML=`<div class='card'><h2>🔐 請先登入</h2><p>請登入 claude.ai 帳號後重新整理頁面，即可使用本系統。</p><button class='p' onclick='location.reload()'>重新整理</button></div>`;return}
- setMe();$('picker').value=me.name;
- if(isAdmin)document.body.classList.add('isadm');
- db.collection('products').onSnapshot(s=>{prodBase={};s.docs.forEach(d=>{const x=d.data();x.expiry=normDate(x.expiry)||'';x.lq=x.mig?0:(x.qty||0);x.lx=x.expiry;prodBase[d.id]=x});rebuild()});
- db.collection('settings').doc('alert').onSnapshot(s=>{if(s.exists)baseDays=s.data().days||30;alertDays=cfgDays||baseDays;$('alertDays').value=alertDays;render()});
- if(isEditor)try{await db.collection('roots').doc(me.id).set({uid:me.id})}catch(e){console.error(e)}
- db.collection('roots').onSnapshot(s=>{roots=new Set(s.docs.map(d=>d.id));rebuild()},e=>console.error(e));
- try{const r=await db.collection('mv').doc(me.id).get();if(!r.exists)await db.collection('mv').doc(me.id).set({uid:me.id})}catch(e){console.error(e)}
- db.collection('mv').onSnapshot(s=>s.docs.forEach(d=>{const u=d.id;if(subs[u])return;subs[u]=db.collection('mv/'+u+'/e').onSnapshot(q=>{mvs[u]=q.docs.map(x=>x.data());rebuild()},e=>console.error(e))}),e=>console.error(e));
+ try{firebase.initializeApp(FB_CONFIG);await firebase.auth().signInAnonymously();db=firebase.firestore();me={id:'main',name:'使用者'}}catch(e){console.error(e)}
+ if(!db){$('me').textContent='無法連線';$('nav').style.display='none';$('tabs').innerHTML=`<div class='card'><h2>⚠️ 無法連線資料庫</h2><p>請確認 FB_CONFIG 設定正確、Firebase 已啟用匿名登入與 Firestore，且網站網域已加入授權網域。</p><button class='p' onclick='location.reload()'>重新整理</button></div>`;return}
+ setMe();$('gate').style.display='block';
+ db.collection('products').onSnapshot(s=>{prodBase={};s.docs.forEach(d=>{const x=d.data();x.expiry=normDate(x.expiry)||'';x.lq=x.mig?0:(x.qty||0);x.lx=x.expiry;prodBase[d.id]=x});rebuild()},e=>console.error(e));
+ db.collection('settings').doc('alert').onSnapshot(s=>{if(s.exists)baseDays=s.data().days||30;alertDays=cfgDays||baseDays;$('alertDays').value=alertDays;render()},e=>console.error(e));
+ db.collection('mv/main/e').onSnapshot(q=>{mvs.main=q.docs.map(x=>x.data());rebuild()},e=>console.error(e));
 }
 const nm=id=>(names[id]&&names[id].name)||'使用者';
 function render(){
- const L=Object.values(products),exp=[].concat(...L.map(p=>(batches[p.barcode]||[]).filter(b=>b.exp&&b.qty>0&&days(b.exp)<=alertDays).map(b=>({name:p.name,expiry:b.exp,qty:b.qty,loc:p.loc})))).sort((a,b)=>a.expiry.localeCompare(b.expiry));$('migBox').style.display=isEditor&&L.some(p=>p.lq>0)?'block':'none';
+ const L=Object.values(products),exp=[].concat(...L.map(p=>(batches[p.barcode]||[]).filter(b=>b.exp&&b.qty>0&&days(b.exp)<=alertDays).map(b=>({name:p.name,expiry:b.exp,qty:b.qty,loc:p.loc})))).sort((a,b)=>a.expiry.localeCompare(b.expiry));$('migBox').style.display=isAdmin&&L.some(p=>p.lq>0)?'block':'none';
  $('alertTxt').textContent='（'+alertDays+' 天內到期或已過期：'+exp.length+' 項）';
  $('expT').innerHTML=exp.map(p=>{const d=days(p.expiry);return`<tr><td>${esc(p.name)}</td><td>${p.expiry}</td><td class="${d<0?'bad':'warn'}">${d<0?'已過期 '+(-d)+' 天':d+' 天'}</td><td>${p.qty}</td><td>${esc(p.loc)}</td></tr>`}).join('')||'<tr><td colspan=5><small>無</small></td></tr>';
  $('lowT').innerHTML=L.filter(p=>p.qty<=p.safe).map(p=>`<tr><td>${esc(p.name)}</td><td class="bad">${p.qty}</td><td>${p.safe}</td></tr>`).join('')||'<tr><td colspan=3><small>無</small></td></tr>';
  const q=$('q1').value.trim().toLowerCase();
- $('stockT').innerHTML=L.filter(p=>!q||(p.name+p.barcode).toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant')).map(p=>`<tr><td>${esc(p.barcode)}</td><td>${esc(p.name)}</td><td>${esc(p.spec)}</td><td class="${p.qty<=p.safe?'bad':''}">${p.qty} ${esc(p.unit)}</td><td>${p.safe}</td><td>${(batches[p.barcode]||[]).filter(b=>b.qty!==0).sort((a,b)=>(a.exp||'9').localeCompare(b.exp||'9')).map(b=>(b.exp||'無效期')+'×'+b.qty).join('<br>')||'-'}</td><td>${esc(p.loc)}</td><td class="adm"><button data-e="${esc(p.barcode)}">編輯</button></td></tr>`).join('')||'<tr><td colspan=8><small>尚無商品</small></td></tr>';
+ $('stockT').innerHTML=L.filter(p=>!q||(p.name+p.barcode).toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant')).map(p=>`<tr><td>${esc(p.barcode)}</td><td>${esc(p.name)}</td><td>${esc(p.spec)}</td><td class="${p.qty<=p.safe?'bad':''}">${p.qty} ${esc(p.unit)}</td><td>${p.safe}</td><td>${(batches[p.barcode]||[]).filter(b=>b.qty!==0).sort((a,b)=>(a.exp||'9').localeCompare(b.exp||'9')).map(b=>(b.exp||'無效期')+'×'+b.qty).join('<br>')||'-'}</td><td>${[...(srcs[p.barcode]||[])].sort((a,b)=>b[1]-a[1]).map(x=>esc(x[0])).join('、')||'-'}</td><td>${esc(p.loc)}</td><td class="adm"><button data-e="${esc(p.barcode)}">編輯</button></td></tr>`).join('')||'<tr><td colspan=9><small>尚無商品</small></td></tr>';
 }
 $('q1').oninput=render;
-$('stockT').onclick=e=>{const c=e.target.dataset.e;if(!c)return;const p=products[c];for(const k of['barcode','name','spec','unit','qty','safe','loc'])$('f_'+k).value=p[k]??'';$('f_exp').value=p.expiry||'';document.querySelector('[data-t=op]').click();$('f_name').focus()};
+$('stockT').onclick=e=>{const c=e.target.dataset.e;if(!c)return;const p=products[c];for(const k of['barcode','name','spec','unit','qty','safe','loc'])$('f_'+k).value=p[k]??'';$('f_exp').value=p.expiry||'';goTab('op');$('f_name').focus()};
 function filtered(){const p=$('l_p').value.trim().toLowerCase(),q=$('l_q').value.trim().toLowerCase(),a=dtMs($('l_a').value,'T00:00:00',0),b=dtMs($('l_b').value,'T23:59:59',1e15),t=$('l_t').value;
  return logs.filter(l=>(!p||(l.picker||'').toLowerCase().includes(p)||nm(l.op).toLowerCase().includes(p))&&(!q||(l.name+l.barcode).toLowerCase().includes(q))&&l.ts>=a&&l.ts<=b&&(!t||l.type===t))}
 const TN={in:'入庫',out:'領取',adjust:'調整'};
-function renderLogs(){$('logT').innerHTML=filtered().slice(0,200).map(l=>`<tr><td>${new Date(l.ts).toLocaleString('zh-TW',{hour12:false})}</td><td class="${l.type}">${TN[l.type]}</td><td>${esc(l.name)}</td><td>${l.delta>0?'+':''}${l.delta}</td><td>${l.after}</td><td>${esc(nm(l.op))}</td><td>${esc(l.picker||'-')}</td><td>${l.exp?'效期 '+l.exp+' ':''}${esc(l.note)}</td></tr>`).join('')||'<tr><td colspan=8><small>無紀錄</small></td></tr>';
- $('pickers').innerHTML=[...new Set(logs.map(l=>l.picker).filter(Boolean))].map(p=>`<option value="${esc(p)}">`).join('')}
+function renderLogs(){$('logT').innerHTML=filtered().slice(0,200).map(l=>`<tr><td>${new Date(l.ts).toLocaleString('zh-TW',{hour12:false})}</td><td class="${l.type}">${TN[l.type]}</td><td>${esc(l.name)}</td><td>${l.delta>0?'+':''}${l.delta}</td><td>${l.after}</td><td>${esc(l.en||'管理員')}</td><td>${esc(l.picker||'-')}</td><td>${esc(l.tag||'-')}</td><td>${l.exp?'效期 '+l.exp+' ':''}${esc(l.note)}</td></tr>`).join('')||'<tr><td colspan=9><small>無紀錄</small></td></tr>';
+ }
 ['l_p','l_q','l_a','l_b','l_t'].forEach(i=>$(i).oninput=renderLogs);
 const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
 async function save(name,rowsArr){const d=await claude.use('downloads');if(!d)return toast('此環境無法下載',false);try{await d.save({filename:name,data:'\uFEFF'+rowsArr.map(r=>r.map(csvCell).join(',')).join('\r\n')});toast('已匯出')}catch(e){toast('下載已取消',false)}}
-$('exp').onclick=()=>save('異動紀錄.csv',[['時間','類型','條碼','商品','變動','結餘','經手帳號','領取者','備註'],...filtered().map(l=>[new Date(l.ts).toLocaleString('zh-TW',{hour12:false}),TN[l.type],l.barcode,l.name,l.delta,l.after,nm(l.op),l.picker||'',(l.exp?'效期'+l.exp+' ':'')+(l.note||'')])]);
+$('exp').onclick=()=>save('異動紀錄.csv',[['時間','類型','條碼','商品','變動','結餘','經手帳號','領取者','目的／來源','備註'],...filtered().map(l=>[new Date(l.ts).toLocaleString('zh-TW',{hour12:false}),TN[l.type],l.barcode,l.name,l.delta,l.after,(l.en||'管理員'),l.picker||'',l.tag||'',(l.exp?'效期'+l.exp+' ':'')+(l.note||'')])]);
 $('tpl').onclick=async()=>{const d=await claude.use('downloads');if(!d)return toast('此環境無法下載',false);const ws=XLSX.utils.aoa_to_sheet([['條碼','名稱','規格','單位','庫存','安全庫存','效期','位置'],['4710088000011','範例礦泉水','600ml','瓶',100,20,'2027/06/30','A-01']]);ws['!cols']=[{wch:16},{wch:16},{wch:10},{wch:6},{wch:8},{wch:10},{wch:12},{wch:8}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'商品');try{await d.save({filename:'匯入範本.xlsx',data:XLSX.write(wb,{type:'array',bookType:'xlsx'})});toast('已下載範本')}catch(e){toast('下載已取消',false)}};
 
 function refSel(){const p=sel&&products[sel];$('sel').innerHTML=p?`已選擇：<b>${esc(p.name)}</b> ${esc(p.spec)}（${esc(p.barcode)}）<br>庫存 <b>${p.qty}</b> ${esc(p.unit)}　效期 ${p.expiry||'-'}　位置 ${esc(p.loc)||'-'}`:'尚未選擇商品'}
@@ -146,7 +159,7 @@ async function lookup(code,k){code=(code||'').trim();if(!code||!db)return;let p=
  if(!p&&(k==='n'||!/^\d{8,}$/.test(code))){toast('查無符合的商品',false);return}
  clearSearch();
  if(p){if(await ask(`是否為「${p.name}」${p.spec?'（'+p.spec+'）':''}？\n效期 ${p.expiry||'-'}，目前庫存 ${p.qty} ${p.unit}`,'確認是此商品','取消／重新掃描')){sel=code;refSel();addCart(code);$('qty').value=1}}
- else if(isAdmin){if(await ask(`查無此條碼 ${code}，是否要新增此條碼為新商品？`,'是，快速建檔')){$('f_barcode').value=code;$('f_name').focus();toast('已帶入條碼，請填寫商品資料')}}
+ else if(isAdmin){if(await ask(`查無此條碼 ${code}，是否要新增此條碼為新商品？`,'是，快速建檔')){$('f_barcode').value=code;$('f_name').focus();toast('已帶入條碼，請於下方「新增／編輯商品」填寫資料')}}
  else toast('查無此條碼，請聯絡管理員建檔',false)}
 function findP(q,k){q=(q||'').trim().toLowerCase();return q?Object.values(products).filter(p=>k==='n'?(p.name||'').toLowerCase().includes(q):p.barcode.toLowerCase().includes(q)):[]}
 function clearSearch(){$('bc').value='';$('nsrch').value='';$('cands').innerHTML=''}
@@ -156,23 +169,12 @@ $('bc').oninput=()=>showCands('b');$('nsrch').oninput=()=>showCands('n');
 $('nsrch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();lookup($('nsrch').value,'n')}};
 $('go').onclick=()=>lookup($('bc').value);$('bc').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();lookup($('bc').value)}};
 
-async function moveOld(code,type,val,picker,note){const ref=db.collection('products').doc(code),s=await ref.get();if(!s.exists)throw Error('商品不存在');const p=s.data();
- const after=type==='adjust'?val:p.qty+(type==='in'?val:-val);if(after<0)throw Error(`庫存不足（目前 ${p.qty}）`);
- await ref.update({qty:after});const ts=Date.now();
- await db.collection('logs').doc(ts+'-'+Math.random().toString(36).slice(2,6)).set({ts,type,barcode:code,name:p.name,delta:after-p.qty,after,op:me.id,picker:type==='out'?picker:'',note})}
-$('submit').onclick=()=>lock(async()=>{if(!sel||!products[sel])return toast('請先掃描並確認商品',false);const v=parseInt($('qty').value,10);
- if(!(v>=0)||(mode!=='adjust'&&v<1))return toast('數量不正確',false);const picker=$('picker').value.trim();if(mode==='out'&&!picker)return toast('請填寫領取者',false);
- const p=products[sel];if(mode==='out'&&v>p.qty)return toast(`領取量超過庫存（${p.qty}）`,false);
- if(mode==='out'&&p.expiry&&days(p.expiry)<0&&!await ask('此商品已過期，仍要領取嗎？'))return;
- try{await move(sel,mode,v,picker,$('note').value.trim());toast(TN[mode]+'完成');$('qty').value=1;$('note').value=''}catch(e){toast(e.message||'失敗',false)}});
-
 $('saveP').onclick=()=>lock(async()=>{const g=k=>$('f_'+k).value.trim(),code=g('barcode'),name=g('name');if(!code||!name)return toast('條碼與名稱必填',false);
  const ex=normDate(g('exp'));if(ex===null)return toast('效期格式需為 yyyy/mm/dd',false);const old=products[code],qty=Math.max(0,parseInt(g('qty'),10)||0),data={barcode:code,name,spec:g('spec'),unit:g('unit')||'個',safe:parseInt(g('safe'),10)||0,loc:g('loc'),mig:true};
  try{await put({kind:'prod',...data});if(!old&&qty>0){products[code]={...data,qty:0};await move(code,'in',qty,'','新增商品初始庫存',ex)}toast('已儲存：'+name)}catch(e){toast(e.message||'儲存失敗',false)}});
 $('saveDays').onclick=()=>lock(async()=>{try{await put({kind:'cfg',days:Math.max(1,parseInt($('alertDays').value,10)||30)});toast('已儲存')}catch(e){toast('儲存失敗',false)}});
 
-function parseCSV(t){const out=[];let r=[],c='',q=false;t=t.replace(/^\uFEFF/,'');for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}else if(ch==='"')q=true;else if(ch===','){r.push(c);c=''}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);c='';if(r.some(x=>x.trim()))out.push(r);r=[]}else c+=ch}r.push(c);if(r.some(x=>x.trim()))out.push(r);return out}
-$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;let data;try{const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''}).slice(1).filter(r=>r.some(x=>String(x).trim()!==''))}catch(err){return toast('無法讀取檔案',false)}const seen=new Set();rows=[];const errs=[];
+$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;let data;try{const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''}).slice(1).filter(r=>r.some(x=>String(x).trim()!==''))}catch(err){return toast('無法讀取檔案',false)}rows=[];const errs=[];
  data.forEach((r,i)=>{const T=x=>typeof x==='number'?x.toLocaleString('fullwide',{useGrouping:false}):(x instanceof Date?'':String(x).trim());const[code,name,spec,unit,qty,safe]=r.slice(0,6).map(T),loc=T(r[7]??''),exp=normDate(r[6]),er=[];
   if(!code)er.push('條碼必填');if(!name)er.push('名稱必填');
   if(qty===''||!/^\d+$/.test(qty))er.push('庫存需為非負整數');if(safe&&!/^\d+$/.test(safe))er.push('安全庫存格式錯誤');
@@ -190,24 +192,6 @@ let stream,timer;$('cam').onclick=async()=>{if(!('BarcodeDetector'in window))ret
  timer=setInterval(async()=>{if(b)return;b=true;try{const r=await det.detect(v);if(r.length){stopCam();await lookup(r[0].rawValue)}}catch(e){}b=false},400)};
 function stopCam(){h5&&h5Stop();clearInterval(timer);stream&&stream.getTracks().forEach(t=>t.stop());stream=null;$('video').style.display='none';$('stopcam').style.display='none';$('cam').style.display=''}
 $('stopcam').onclick=stopCam;
-let cart={};
-function addCart(code){const v=Math.max(0,parseInt($('qty').value,10)||1);cart[code]=(cart[code]||0)+v;renderCart()}
-function renderCart(){Object.keys(cart).forEach(k=>{if(!products[k])delete cart[k]});const ks=Object.keys(cart);
- $('cartN').textContent=ks.length?`（${ks.length} 項）`:'';$('cqh').textContent=mode==='adjust'?'盤點後數量':'數量';
- $('cartT').innerHTML=ks.map(k=>{const p=products[k];return`<tr><td>${esc(p.name)} <small>${esc(p.spec)}</small></td><td>${p.qty}</td><td><input type="number" min="0" value="${cart[k]}" data-q="${esc(k)}" style="width:90px"></td><td><button data-r="${esc(k)}">移除</button></td></tr>`}).join('')||'<tr><td colspan=4><small>掃描或搜尋商品並確認後，會加入這裡</small></td></tr>'}
-$('cartT').onchange=e=>{const k=e.target.dataset.q;if(k)cart[k]=parseInt(e.target.value,10)||0};
-$('cartT').onclick=e=>{const k=e.target.dataset.r;if(k){delete cart[k];renderCart()}};
-$('submit').onclick=()=>lock(async()=>{
- const ks=Object.keys(cart).filter(k=>products[k]);if(!ks.length)return toast('清單是空的，請先掃描並加入商品',false);
- const picker=$('picker').value.trim();if(mode==='out'&&!picker)return toast('請填寫領取者',false);
- const errs=[];ks.forEach(k=>{const p=products[k],v=cart[k];if(!Number.isInteger(v)||v<(mode==='adjust'?0:1))errs.push(`${p.name}：數量不正確`);else if(mode==='out'&&v>p.qty)errs.push(`${p.name}：領取量 ${v} 超過庫存 ${p.qty}`)});
- if(errs.length)return toast(errs.slice(0,3).join('；'),false);
- const ex=mode==='out'?ks.filter(k=>products[k].expiry&&days(products[k].expiry)<0):[];
- if(ex.length&&!await ask(`清單中有已過期商品（${ex.map(k=>products[k].name).join('、')}），仍要領取嗎？`))return;
- const note=$('note').value.trim();let n=0;const fail=[];
- for(const k of ks){try{await move(k,mode,cart[k],picker,note);delete cart[k];n++}catch(e){fail.push((products[k]?products[k].name:k)+'：'+(e.message||'失敗'))}}
- renderCart();if(!fail.length){$('note').value='';toast(`${TN[mode]}完成，共 ${n} 項`)}else toast(`成功 ${n} 項，失敗 ${fail.length} 項：${fail.join('；')}`,false)});
-renderCart();
 let h5;const FM=()=>{const F=Html5QrcodeSupportedFormats;return[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.QR_CODE]};
 async function h5Start(){if(!window.Html5Qrcode)return toast('掃碼元件載入失敗，請改用拍照辨識或手動輸入',false);
  $('reader').style.display='block';$('stopcam').style.display='';$('cam').style.display='none';
@@ -220,17 +204,22 @@ $('photo').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)
  try{const q=new Html5Qrcode('tmpreader',{formatsToSupport:FM(),verbose:false});const t=await q.scanFile(f,false);await lookup(t)}catch(err){toast('辨識不到條碼，請靠近一點、對焦清楚後重拍',false)}box.remove()};
 ['f_exp','l_a','l_b'].forEach(i=>$(i).addEventListener('input',e=>{const t=e.target;if(e.inputType&&e.inputType.startsWith('delete'))return;const d=t.value.replace(/\D/g,'').slice(0,8);t.value=d.length>6?d.slice(0,4)+'/'+d.slice(4,6)+'/'+d.slice(6):d.length>4?d.slice(0,4)+'/'+d.slice(4):d;if(i!=='f_exp')renderLogs()}));
 function applyStock(){Object.values(products).forEach(p=>{const bs=batches[p.barcode]||[];p.qty=bs.reduce((s,b)=>s+b.qty,0);p.expiry=bs.filter(b=>b.exp&&b.qty>0).map(b=>b.exp).sort()[0]||''})}
+function fillPicker(){const s=$('picker'),v=s.value||(emp?emp.name:''),L=[...new Set(Object.values(emps).map(e=>e.name))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));s.innerHTML='<option value="">'+(L.length?'（請選擇領取者）':'（請先到管理員功能新增員工）')+'</option>'+L.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');s.value=L.includes(v)?v:''}
+let srcs={};
+function fillSel(id,list){const s=$(id),v=s.value;s.innerHTML='<option value="">'+(list.length?'（請選擇）':'（尚未設定選項）')+'</option>'+list.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');s.value=list.includes(v)?v:''}
+function renderOpts(){const k=JSON.stringify(opts);if(k===lastOpts)return;lastOpts=k;fillSel('purpose',opts.purpose);fillSel('source',opts.source);
+ [['purpose','optPurpose'],['source','optSource']].forEach(([l,id])=>{$(id).innerHTML=opts[l].map((x,i)=>`<div class="row" style="margin-bottom:6px"><input value="${esc(x)}"><button data-ol="${l}" data-oi="${i}" data-oa="s">儲存</button><button data-ol="${l}" data-oi="${i}" data-oa="d">刪除</button></div>`).join('')+`<div class="row"><input placeholder="新增選項"><button class="p" data-ol="${l}" data-oa="a">新增</button></div>`})}
 function rebuild(){const raw=Object.values(mvs).flat().sort((a,b)=>a.ts-b.ts),bal={},tot={};
- admins=new Set(roots);prodOps={};cfgDays=0;
- const all=raw.filter(m=>{if(!m.kind)return true;if(!admins.has(m.op))return false;if(m.kind==='adm'){if(m.on)admins.add(m.target);else if(!roots.has(m.target))admins.delete(m.target)}else if(m.kind==='prod'){prodOps[m.barcode]={...(prodOps[m.barcode]||{}),barcode:m.barcode,name:m.name,spec:m.spec,unit:m.unit,safe:m.safe,loc:m.loc}}else if(m.kind==='cfg'){cfgDays=m.days}return false});
- all.forEach(m=>{const k=m.barcode+'|'+(m.exp||'');bal[k]=(bal[k]||0)+m.delta;tot[m.barcode]=(tot[m.barcode]||0)+m.delta;m.after=tot[m.barcode]});
+ admins=new Set(roots);prodOps={};cfgDays=0;pwHash='';emps={};opts={purpose:[],source:[]};
+ const all=raw.filter(m=>{if(!m.kind)return true;if(m.kind==='adm'){if(m.on)admins.add(m.target);else if(!roots.has(m.target))admins.delete(m.target)}else if(m.kind==='prod'){prodOps[m.barcode]={...(prodOps[m.barcode]||{}),barcode:m.barcode,name:m.name,spec:m.spec,unit:m.unit,safe:m.safe,loc:m.loc}}else if(m.kind==='cfg'){cfgDays=m.days}else if(m.kind==='pw'){pwHash=m.hash}else if(m.kind==='opt'){if(opts[m.list])opts[m.list]=Array.isArray(m.items)?m.items:[]}else if(m.kind==='emp'){if(m.on)emps[m.idh]={name:m.name,tail:m.tail};else delete emps[m.idh]}return false});
+ srcs={};all.forEach(m=>{if(m.type==='in'&&m.tag)(srcs[m.barcode]=srcs[m.barcode]||new Map()).set(m.tag,m.ts);const k=m.barcode+'|'+(m.exp||'');bal[k]=(bal[k]||0)+m.delta;tot[m.barcode]=(tot[m.barcode]||0)+m.delta;m.after=tot[m.barcode]});
  batches={};for(const k in bal){const i=k.indexOf('|'),c=k.slice(0,i);(batches[c]=batches[c]||[]).push({exp:k.slice(i+1),qty:bal[k]})}
- logs=all.reverse();products={};new Set([...Object.keys(prodBase),...Object.keys(prodOps)]).forEach(c=>products[c]={...(prodBase[c]||{}),...(prodOps[c]||{}),barcode:c});alertDays=cfgDays||baseDays;$('alertDays').value=alertDays;isAdmin=isEditor||admins.has(me.id);document.body.classList.toggle('isadm',isAdmin);setMe();applyStock();render();refSel();renderCart();renderLogs();if(isAdmin)renderAdm();
- claude.use('user').then(u=>u.profiles([...new Set(logs.map(l=>l.op))])).then(p=>{names=p;renderLogs()}).catch(()=>{})}
-async function move(code,type,val,picker,note,exp){const p=products[code];if(!p)throw Error('商品不存在');exp=exp||'';const b=(batches[code]||[]).find(x=>x.exp===exp),cur=b?b.qty:0;
+ logs=all.reverse();products={};new Set([...Object.keys(prodBase),...Object.keys(prodOps)]).forEach(c=>products[c]={...(prodBase[c]||{}),...(prodOps[c]||{}),barcode:c});alertDays=cfgDays||baseDays;$('alertDays').value=alertDays;isAdmin=!!(emp&&emp.sys);document.body.classList.toggle('isadm',isAdmin);setMe();applyStock();render();refSel();renderCart();renderLogs();renderOpts();fillPicker();if(isAdmin)renderEmps()
+}
+async function move(code,type,val,picker,note,exp,tag){const p=products[code];if(!p)throw Error('商品不存在');exp=exp||'';const b=(batches[code]||[]).find(x=>x.exp===exp),cur=b?b.qty:0;
  if(type==='out'&&cur<val)throw Error('庫存不足（該批次剩 '+cur+'）');
  const delta=type==='out'?-val:type==='adjust'?val-cur:val,ts=Date.now();
- await db.collection('mv/'+me.id+'/e').doc(ts+'-'+Math.random().toString(36).slice(2,6)).set({ts,type,barcode:code,name:p.name,exp,delta,op:me.id,picker:type==='out'?picker:'',note:note||''})}
+ await db.collection('mv/'+me.id+'/e').doc(ts+'-'+Math.random().toString(36).slice(2,6)).set({ts,type,barcode:code,name:p.name,exp,delta,op:me.id,en:emp?emp.name:'',picker:type==='out'?picker:'',tag:tag||'',note:note||''})}
 function alloc(code,q){const bs=(batches[code]||[]).filter(b=>b.qty>0).sort((a,b)=>(a.exp||'9999').localeCompare(b.exp||'9999'));let left=q;const out=[];for(const b of bs){if(left<=0)break;const t=Math.min(left,b.qty);out.push({exp:b.exp,take:t});left-=t}return{out,short:left}}
 function fifoTxt(c,q){const a=alloc(c,q);return '先進先出：'+(a.out.map(x=>(x.exp||'無效期')+'×'+x.take).join('、')||'無庫存')+(a.short>0?`（不足 ${a.short}）`:'')}
 function addCart(code){const v=Math.max(0,parseInt($('qty').value,10)||1),x=C.find(r=>r.c===code&&r.e==='');x?x.q+=v:C.push({c:code,e:'',q:v});renderCart()}
@@ -243,21 +232,44 @@ function renderCart(){C=C.filter(r=>products[r.c]);$('cartN').textContent=C.leng
 $('cartT').onchange=e=>{const t=e.target,i=t.dataset.i,r=C[i];if(i==null||!r)return;if(t.dataset.f==='q')r.q=parseInt(t.value,10)||0;else{const n=normDate(t.value);if(n===null){toast('效期格式需為 yyyy/mm/dd',false);t.value=r.e;return}r.e=n}renderCart()};
 $('cartT').onclick=e=>{const i=e.target.dataset.r;if(i!=null){C.splice(+i,1);renderCart()}};
 $('submit').onclick=()=>lock(async()=>{const rs=C.filter(r=>products[r.c]);if(!rs.length)return toast('清單是空的，請先掃描並加入商品',false);
- const picker=$('picker').value.trim();if(mode==='out'&&!picker)return toast('請填寫領取者',false);
+ const picker=$('picker').value.trim();if(mode==='out'&&!picker)return toast('請選擇領取者',false);
+ let tag='';if(mode==='out'){tag=$('purpose').value;if(opts.purpose.length&&!tag)return toast('請選擇領取目的',false)}
+ if(mode==='in'){tag=$('source').value;if(opts.source.length&&!tag)return toast('請選擇入庫來源',false)}
  const note=$('note').value.trim(),jobs=[],errs=[];
  if(mode==='out'){const g={};rs.forEach(r=>g[r.c]=(g[r.c]||0)+r.q);for(const c in g){const q=g[c],pn=products[c].name;if(!(q>=1)){errs.push(pn+'：數量不正確');continue}const a=alloc(c,q);if(a.short>0)errs.push(`${pn}：領取量 ${q} 超過庫存`);a.out.forEach(x=>jobs.push({c,e:x.exp,q:x.take}))}}
  else rs.forEach(r=>{if(!(r.q>=(mode==='adjust'?0:1)))errs.push(products[r.c].name+'：數量不正確');else jobs.push(r)});
  if(errs.length)return toast(errs.slice(0,3).join('；'),false);
  if(mode==='out'){const ex=jobs.filter(j=>j.e&&days(j.e)<0);if(ex.length&&!await ask(`領取內容包含已過期批次（${[...new Set(ex.map(j=>products[j.c].name+' '+j.e))].join('、')}），仍要領取嗎？`))return}
- let n=0;const fail=[];for(const j of jobs){try{await move(j.c,mode,j.q,picker,note,j.e);n++}catch(e){fail.push(products[j.c].name+'：'+(e.message||'失敗'))}}
+ let n=0;const fail=[];for(const j of jobs){try{await move(j.c,mode,j.q,picker,note,j.e,tag);n++}catch(e){fail.push(products[j.c].name+'：'+(e.message||'失敗'))}}
  C=[];$('note').value='';renderCart();if(!fail.length)toast(`${TN[mode]}完成，共 ${n} 筆`);else toast(`成功 ${n} 筆，失敗 ${fail.length} 筆（請重新加入失敗項目）：${fail.join('；')}`,false)});
 $('mig').onclick=()=>lock(async()=>{let n=0;for(const p of Object.values(products)){if(!(p.lq>0))continue;try{await move(p.barcode,'in',p.lq,'','舊資料轉入',p.lx);await db.collection('products').doc(p.barcode).update({mig:true,qty:0,expiry:''});n++}catch(e){}}toast(`已轉入 ${n} 項`)});
-function setMe(){if(me)$('me').textContent='👤 '+me.name+'（'+(isAdmin?(isEditor||roots.has(me.id)?'系統管理員':'管理員'):'一般使用者')+'）'}
+function setMe(){if(me)$('me').textContent='👤 '+(emp?emp.name:me.name)+'（'+(isAdmin?'管理員':'員工')+'）'}
 function put(o){const ts=Date.now();return db.collection('mv/'+me.id+'/e').doc(ts+'-'+Math.random().toString(36).slice(2,6)).set({...o,ts,op:me.id})}
 async function renderAdm(){const ids=[...admins];let ps={};try{const u=await claude.use('user');ps=await u.profiles(ids)}catch(e){}
  $('admList').innerHTML=ids.map(id=>{const p=ps[id]||{},root=roots.has(id);return`<div class='row' style='margin-bottom:6px'><span>${esc(p.name||'使用者')}${id===me.id?' <small>（你）</small>':''} <small>${root?'系統管理員（不可移除）':'管理員'}</small></span>${root||id===me.id?'':`<button data-rm='${esc(id)}'>移除</button>`}</div>`}).join('')}
-let admT;$('admQ').oninput=()=>{clearTimeout(admT);admT=setTimeout(async()=>{const q=$('admQ').value.trim();if(!q){$('admRes').innerHTML='';return}
- try{const u=await claude.use('user'),hits=await u.search(q);$('admRes').innerHTML=hits.filter(h=>!admins.has(h.id)).map(h=>`<div class='row' style='margin-bottom:6px'><span>${esc(h.name||'使用者')}</span><button data-add='${esc(h.id)}'>設為管理員</button></div>`).join('')||'<small>找不到，或已是管理員</small>'}catch(e){$('admRes').innerHTML='<small>搜尋失敗</small>'}},300)};
-$('adm').onclick=e=>{const a=e.target.dataset.add,r=e.target.dataset.rm;if(!a&&!r)return;lock(async()=>{try{await put({kind:'adm',target:a||r,on:!!a});toast(a?'已新增管理員':'已移除管理員');if(a){$('admQ').value='';$('admRes').innerHTML=''}}catch(err){toast('操作失敗',false)}})};
+$('adm').onclick=e=>{const r=e.target.dataset.rm;if(!r)return;lock(async()=>{try{await put({kind:'adm',target:r,on:false});toast('已移除管理員')}catch(err){toast('操作失敗',false)}})};
+$('admBody').addEventListener('click',e=>{const b=e.target.closest('button[data-ol]');if(!b)return;const l=b.dataset.ol,a=b.dataset.oa,idx=+b.dataset.oi,inp=b.closest('.row').querySelector('input'),v=inp.value.trim(),list=[...opts[l]];
+ lock(async()=>{if(a!=='d'){if(!v)return toast('請輸入選項名稱',false);if(list.some((x,i)=>x===v&&i!==idx))return toast('已有相同的選項',false)}
+  if(a==='a')list.push(v);else if(a==='s')list[idx]=v;else{if(!await ask(`確定刪除「${list[idx]}」？（過去的紀錄不受影響）`,'刪除'))return;list.splice(idx,1)}
+  try{await put({kind:'opt',list:l,items:list});toast(a==='a'?'已新增':a==='s'?'已儲存':'已刪除')}catch(err){toast('操作失敗',false)}})});
+{const A=$('admBody');[$('file').closest('.card'),$('migBox')].forEach(n=>{n.classList.remove('adm');A.appendChild(n)});const c=document.createElement('div');c.className='card';c.innerHTML='<h2>⏰ 效期警示設定</h2>';const r=$('alertDays').closest('.row');r.classList.remove('adm');c.appendChild(r);A.appendChild(c)}
+const sha=async s=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('inv:'+s)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+function showAdm(){$('lockBox').style.display=unlocked?'none':'block';$('admBody').style.display=unlocked?'block':'none'}
+$('unlock').onclick=async()=>{if(Date.now()<lockUntil)return toast('嘗試次數過多，請 30 秒後再試',false);const v=$('pw').value;let ok=false;try{ok=pwHash?(await sha(v))===pwHash:v==='8888'}catch(e){}
+ if(!ok){if(++badTry>=5){badTry=0;lockUntil=Date.now()+3e4}return toast('密碼錯誤',false)}badTry=0;unlocked=true;$('pw').value='';showAdm()};
+$('pw').onkeydown=e=>{if(e.key==='Enter')$('unlock').click()};
+$('lockBtn').onclick=()=>{unlocked=false;showAdm()};
+$('chpw').onclick=()=>lock(async()=>{const a=$('pw1').value,b=$('pw2').value;if(a.length<4)return toast('密碼至少 4 碼',false);if(a!==b)return toast('兩次輸入不一致',false);try{await put({kind:'pw',hash:await sha(a)});$('pw1').value=$('pw2').value='';toast('密碼已修改')}catch(e){toast('修改失敗',false)}});
+const shaE=id=>sha('emp:'+id);
+function renderEmps(){const L=Object.entries(emps);$('empList').innerHTML=L.map(([h,e])=>`<div class='row' style='margin-bottom:6px'><span>${esc(e.name)} <small>編號末碼 ••${esc(e.tail||'')}</small></span><button data-ed='${h}'>移除</button></div>`).join('')||'<small>尚未新增員工</small>'}
+$('empAdd').onclick=()=>lock(async()=>{const id=$('empId').value.trim().toUpperCase(),n=$('empName').value.trim();if(!id||!n)return toast('請填寫員工編號與姓名',false);try{await put({kind:'emp',on:true,idh:await shaE(id),name:n,tail:id.slice(-2)});$('empId').value=$('empName').value='';toast('已新增員工：'+n)}catch(e){toast('新增失敗',false)}});
+$('empList').onclick=e=>{const h=e.target.dataset.ed;if(h)lock(async()=>{try{await put({kind:'emp',on:false,idh:h});toast('已移除員工')}catch(err){toast('移除失敗',false)}})};
+async function enter(){const raw=$('gid').value.trim(),v=raw.toUpperCase(),gm=$('gmsg');gm.style.color='var(--no)';if(!v)return;
+ if(Date.now()<gLock){gm.textContent='嘗試次數過多，請 30 秒後再試';return}
+ let who=null;try{const h=await shaE(v);if(emps[h])who={name:emps[h].name,tail:emps[h].tail}}catch(e){}
+ if(!who){let ok=false;try{ok=pwHash?(await sha(raw))===pwHash:raw==='8888'}catch(e){}if(ok)who={name:'管理員',tail:'',sys:true}}
+ if(!who){if(++gBad>=5){gBad=0;gLock=Date.now()+3e4}gm.textContent=Object.keys(emps).length?'員工編號錯誤':'員工編號錯誤（尚未建立員工名單，請先用管理員密碼登入）';return}
+ gBad=0;emp=who;gm.textContent='';$('gate').style.display='none';$('gid').value='';isAdmin=!!who.sys;unlocked=isAdmin;document.body.classList.toggle('isadm',isAdmin);showAdm();rebuild()}
+$('gbtn').onclick=enter;$('gid').onkeydown=e=>{if(e.key==='Enter')enter()};
 init();
 </script></body></html>
